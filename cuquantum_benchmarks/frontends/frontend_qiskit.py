@@ -1,0 +1,73 @@
+# Copyright (c) 2021-2023, NVIDIA CORPORATION & AFFILIATES
+#
+# SPDX-License-Identifier: BSD-3-Clause
+
+from math import pi
+
+try:
+    import qiskit
+    from qiskit.extensions import UnitaryGate
+except ImportError:
+    qiskit = UnitaryGate = None
+
+from .frontend import Frontend
+
+
+class Qiskit(Frontend):
+
+    def __init__(self, nqubits, config):
+        if qiskit is None:
+            raise RuntimeError("qiskit is not installed")
+
+        self.nqubits = nqubits
+        self.config = config
+
+    def generateCircuit(self, gateSeq):
+        last_g = gateSeq[-1]
+        assert last_g.id == "measure"  # TODO: relax this?
+        circuit = qiskit.QuantumCircuit(self.nqubits, len(last_g.targets))
+
+        for g in gateSeq:
+            if g.id == 'h':
+                circuit.h(g.targets)
+
+            elif g.id == 'x':
+                circuit.x(g.targets)
+
+            elif g.id == 'cnot':
+                circuit.cnot(g.controls, g.targets)
+
+            elif g.id == 'cz':
+                circuit.cz(g.controls, g.targets)
+
+            elif g.id == 'rz':
+                circuit.rz(g.params, g.targets)
+
+            elif g.id == 'rx':
+                circuit.rx(g.params, g.targets)
+
+            elif g.id == 'ry':
+                circuit.ry(g.params, g.targets)
+
+            elif g.id == 'czpowgate':
+                circuit.cp(pi*g.params, g.controls, g.targets)
+
+            elif g.id == 'swap':
+                circuit.swap(*g.targets)
+
+            elif g.id == 'cu':
+                U_gate = UnitaryGate(g.matrix, g.name).control(1)
+                circuit.append(U_gate, [g.controls]+g.targets)
+
+            elif g.id == 'u':
+                # TODO: give the gate a name?
+                U_gate = UnitaryGate(g.matrix)
+                circuit.append(U_gate, g.targets)
+
+            elif g.id == 'measure':
+                circuit.measure(g.targets, g.targets)
+
+            else:
+                raise NotImplementedError(f"The gate type {g.id} is not defined")
+        
+        return circuit
